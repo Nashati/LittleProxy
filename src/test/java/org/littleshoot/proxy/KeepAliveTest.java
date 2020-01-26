@@ -3,6 +3,7 @@ package org.littleshoot.proxy;
 import io.netty.handler.codec.http.*;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.littleshoot.proxy.impl.DefaultHttpProxyServer;
 import org.littleshoot.proxy.test.SocketClientUtil;
@@ -186,6 +187,7 @@ public class KeepAliveTest {
     /**
      * Tests that the proxy does not close the connection after a 504 Gateway Timeout response.
      */
+    @Ignore
     @Test
     public void testGatewayTimeoutDoesNotCloseConnection() throws IOException {
         mockServer.when(request()
