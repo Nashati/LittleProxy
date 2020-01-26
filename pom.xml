@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>xyz.rogfam</groupId>
     <artifactId>littleproxy</artifactId>
@@ -8,7 +9,7 @@
     <description>
         LittleProxy is a high performance HTTP proxy written in Java and using the Netty networking framework.
     </description>
-    <url>https://github.com/mrog/LittleProxy</url>
+    <url>https://github.com/nashati/LittleProxy</url>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -28,24 +29,20 @@
 
     <issueManagement>
         <system>github</system>
-        <url>https://github.com/mrog/LittleProxy/issues</url>
+        <url>https://github.com/nashati/LittleProxy/issues</url>
     </issueManagement>
 
     <scm>
-        <connection>scm:git:https://github.com/mrog/LittleProxy.git</connection>
-        <developerConnection>scm:git:git@github.com:mrog/LittleProxy.git</developerConnection>
-        <url>scm:git:https://github.com/mrog/LittleProxy</url>
+        <connection>scm:git:https://github.com/nashati/LittleProxy.git</connection>
+        <developerConnection>scm:git:git@github.com:nashati/LittleProxy.git</developerConnection>
+        <url>scm:git:https://github.com/nashati/LittleProxy</url>
         <tag>HEAD</tag>
     </scm>
 
     <distributionManagement>
-        <snapshotRepository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-        </snapshotRepository>
         <repository>
-            <id>ossrh</id>
-            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/nashati/LittleProxy</url>
         </repository>
     </distributionManagement>
 
@@ -562,12 +559,14 @@
                             </filters>
 
                             <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <manifestEntries>
                                         <Main-Class>org.littleshoot.proxy.Launcher</Main-Class>
                                     </manifestEntries>
                                 </transformer>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                                <transformer
+                                        implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
                                     <resource>log4j.xml</resource>
                                     <file>src/main/config/log4j.xml</file>
                                 </transformer>
@@ -732,7 +731,9 @@
             <email>mark.rogers@gmail.com</email>
             <organization>Mark Rogers</organization>
             <organizationUrl>https://github.com/mrog</organizationUrl>
-            <roles><role>Developer</role></roles>
+            <roles>
+                <role>Developer</role>
+            </roles>
             <timezone>-7</timezone>
         </developer>
     </developers>
