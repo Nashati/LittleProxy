@@ -582,6 +582,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         try {
             disconnected();
+            lastReadTime = System.currentTimeMillis();
         } finally {
             super.channelInactive(ctx);
         }
