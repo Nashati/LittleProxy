@@ -23,9 +23,9 @@ import java.util.Arrays;
  */
 class ProxyConnectionLogger {
     private final ProxyConnection connection;
-    private final LogDispatch dispatch;
-    private final Logger logger;
-    private final String fqcn = this.getClass().getCanonicalName();
+    private final LogDispatch     dispatch;
+    private final Logger          logger;
+    private final String          fqcn = this.getClass().getCanonicalName();
 
     public ProxyConnectionLogger(ProxyConnection connection) {
         this.connection = connection;
@@ -33,8 +33,7 @@ class ProxyConnectionLogger {
                 .getClass());
         if (lg instanceof LocationAwareLogger) {
             dispatch = new LocationAwareLogggerDispatch((LocationAwareLogger) lg);
-        }
-        else {
+        } else {
             dispatch = new LoggerDispatch();
         }
         logger = lg;
@@ -46,9 +45,21 @@ class ProxyConnectionLogger {
         }
     }
 
+    protected void error(Object instance, String message, Object... params) {
+        if (logger.isErrorEnabled()) {
+            dispatch.doLog(LocationAwareLogger.ERROR_INT, message + " in " + instance, params, null);
+        }
+    }
+
     protected void error(String message, Throwable t) {
         if (logger.isErrorEnabled()) {
             dispatch.doLog(LocationAwareLogger.ERROR_INT, message, null, t);
+        }
+    }
+
+    protected void error(Object instance, String message, Throwable t) {
+        if (logger.isErrorEnabled()) {
+            dispatch.doLog(LocationAwareLogger.ERROR_INT, message + " in " + instance, null, t);
         }
     }
 
@@ -58,9 +69,21 @@ class ProxyConnectionLogger {
         }
     }
 
+    protected void warn(Object instance, String message, Object... params) {
+        if (logger.isWarnEnabled()) {
+            dispatch.doLog(LocationAwareLogger.WARN_INT, message + " in " + instance, params, null);
+        }
+    }
+
     protected void warn(String message, Throwable t) {
         if (logger.isWarnEnabled()) {
             dispatch.doLog(LocationAwareLogger.WARN_INT, message, null, t);
+        }
+    }
+
+    protected void warn(Object instance, String message, Throwable t) {
+        if (logger.isWarnEnabled()) {
+            dispatch.doLog(LocationAwareLogger.WARN_INT, message + " in " + instance, null, t);
         }
     }
 
@@ -70,9 +93,21 @@ class ProxyConnectionLogger {
         }
     }
 
+    protected void info(Object instance, String message, Object... params) {
+        if (logger.isInfoEnabled()) {
+            dispatch.doLog(LocationAwareLogger.INFO_INT, message + " in " + instance, params, null);
+        }
+    }
+
     protected void info(String message, Throwable t) {
         if (logger.isInfoEnabled()) {
             dispatch.doLog(LocationAwareLogger.INFO_INT, message, null, t);
+        }
+    }
+
+    protected void info(Object instance, String message, Throwable t) {
+        if (logger.isInfoEnabled()) {
+            dispatch.doLog(LocationAwareLogger.INFO_INT, message + " in " + instance, null, t);
         }
     }
 
@@ -82,9 +117,21 @@ class ProxyConnectionLogger {
         }
     }
 
+    protected void debug(Object instance, String message, Object... params) {
+        if (logger.isDebugEnabled()) {
+            dispatch.doLog(LocationAwareLogger.DEBUG_INT, message + " in " + instance, params, null);
+        }
+    }
+
     protected void debug(String message, Throwable t) {
         if (logger.isDebugEnabled()) {
             dispatch.doLog(LocationAwareLogger.DEBUG_INT, message, null, t);
+        }
+    }
+
+    protected void debug(Object instance, String message, Throwable t) {
+        if (logger.isDebugEnabled()) {
+            dispatch.doLog(LocationAwareLogger.DEBUG_INT, message + " in " + instance, null, t);
         }
     }
 
@@ -135,27 +182,26 @@ class ProxyConnectionLogger {
                     paramsWithThrowable = Arrays.copyOf(params, params.length + 1);
                     paramsWithThrowable[params.length] = t;
                 }
-            }
-            else {
+            } else {
                 paramsWithThrowable = params;
             }
             switch (level) {
-            case LocationAwareLogger.TRACE_INT:
-                logger.trace(formattedMessage, paramsWithThrowable);
-                break;
-            case LocationAwareLogger.DEBUG_INT:
-                logger.debug(formattedMessage, paramsWithThrowable);
-                break;
-            case LocationAwareLogger.INFO_INT:
-                logger.info(formattedMessage, paramsWithThrowable);
-                break;
-            case LocationAwareLogger.WARN_INT:
-                logger.warn(formattedMessage, paramsWithThrowable);
-                break;
-            case LocationAwareLogger.ERROR_INT:
-            default:
-                logger.error(formattedMessage, paramsWithThrowable);
-                break;
+                case LocationAwareLogger.TRACE_INT:
+                    logger.trace(formattedMessage, paramsWithThrowable);
+                    break;
+                case LocationAwareLogger.DEBUG_INT:
+                    logger.debug(formattedMessage, paramsWithThrowable);
+                    break;
+                case LocationAwareLogger.INFO_INT:
+                    logger.info(formattedMessage, paramsWithThrowable);
+                    break;
+                case LocationAwareLogger.WARN_INT:
+                    logger.warn(formattedMessage, paramsWithThrowable);
+                    break;
+                case LocationAwareLogger.ERROR_INT:
+                default:
+                    logger.error(formattedMessage, paramsWithThrowable);
+                    break;
             }
         }
     }
