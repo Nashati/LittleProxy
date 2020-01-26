@@ -38,7 +38,7 @@ import static org.littleshoot.proxy.impl.ConnectionState.*;
  * vary a little depending on the concrete implementation of ProxyConnection.
  * However, all ProxyConnections share the following lifecycle events:
  * </p>
- * 
+ *
  * <ul>
  * <li>{@link #connected()} - Once the underlying channel is active, the
  * ProxyConnection is considered connected and moves into
@@ -49,15 +49,14 @@ import static org.littleshoot.proxy.impl.ConnectionState.*;
  * <li>{@link #becameWritable()} - When the underlying channel becomes
  * writeable, this callback is invoked.</li>
  * </ul>
- * 
+ *
  * <p>
  * By default, incoming data on the underlying channel is automatically read and
  * passed to the {@link #read(Object)} method. Reading can be stopped and
  * resumed using {@link #stopReading()} and {@link #resumeReading()}.
  * </p>
- * 
- * @param <I>
- *            the type of "initial" message. This will be either
+ *
+ * @param <I> the type of "initial" message. This will be either
  *            {@link HttpResponse} or {@link HttpRequest}.
  */
 abstract class ProxyConnection<I extends HttpObject> extends
@@ -65,14 +64,14 @@ abstract class ProxyConnection<I extends HttpObject> extends
     protected final ProxyConnectionLogger LOG = new ProxyConnectionLogger(this);
 
     protected final DefaultHttpProxyServer proxyServer;
-    protected final boolean runsAsSslClient;
+    protected final boolean                runsAsSslClient;
 
     protected volatile ChannelHandlerContext ctx;
-    protected volatile Channel channel;
+    protected volatile Channel               channel;
 
-    private volatile ConnectionState currentState;
-    private volatile boolean tunneling = false;
-    protected volatile long lastReadTime = 0;
+    private volatile   ConnectionState currentState;
+    private volatile   boolean         tunneling    = false;
+    protected volatile long            lastReadTime = 0;
 
     /**
      * If using encryption, this holds our {@link SSLEngine}.
@@ -81,18 +80,15 @@ abstract class ProxyConnection<I extends HttpObject> extends
 
     /**
      * Construct a new ProxyConnection.
-     * 
-     * @param initialState
-     *            the state in which this connection starts out
-     * @param proxyServer
-     *            the {@link DefaultHttpProxyServer} in which we're running
-     * @param runsAsSslClient
-     *            determines whether this connection acts as an SSL client or
-     *            server (determines who does the handshake)
+     *
+     * @param initialState    the state in which this connection starts out
+     * @param proxyServer     the {@link DefaultHttpProxyServer} in which we're running
+     * @param runsAsSslClient determines whether this connection acts as an SSL client or
+     *                        server (determines who does the handshake)
      */
     protected ProxyConnection(ConnectionState initialState,
-            DefaultHttpProxyServer proxyServer,
-            boolean runsAsSslClient) {
+                              DefaultHttpProxyServer proxyServer,
+                              boolean runsAsSslClient) {
         become(initialState);
         this.proxyServer = proxyServer;
         this.runsAsSslClient = runsAsSslClient;
@@ -106,23 +102,30 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * Read is invoked automatically by Netty as messages arrive on the socket.
      */
     protected void read(Object msg) {
-        LOG.debug("Reading: {}", msg);
+        LOG.debug(ProxyConnection.this, "Reading: {}", msg);
 
-        lastReadTime = System.currentTimeMillis();
+        updateLastReadTime();
 
         if (tunneling) {
             // In tunneling mode, this connection is simply shoveling bytes
             readRaw((ByteBuf) msg);
-        } else if ( msg instanceof HAProxyMessage) {
-            readHAProxyMessage((HAProxyMessage)msg);
+        } else if (msg instanceof HAProxyMessage) {
+            readHAProxyMessage((HAProxyMessage) msg);
         } else {
             // If not tunneling, then we are always dealing with HttpObjects.
             readHTTP((HttpObject) msg);
         }
     }
 
+    private void updateLastReadTime() {
+        long tmpLastReadTime = lastReadTime;
+        lastReadTime = System.currentTimeMillis();
+        LOG.debug(ProxyConnection.this, "Updating read timeout in {} from {} to {}", this, tmpLastReadTime, lastReadTime);
+    }
+
     /**
      * Read an {@link HAProxyMessage}
+     *
      * @param msg {@link HAProxyMessage}
      */
     protected abstract void readHAProxyMessage(HAProxyMessage msg);
@@ -135,53 +138,53 @@ abstract class ProxyConnection<I extends HttpObject> extends
     private void readHTTP(HttpObject httpObject) {
         ConnectionState nextState = getCurrentState();
         switch (getCurrentState()) {
-        case AWAITING_INITIAL:
-            if (httpObject instanceof HttpMessage) {
-                nextState = readHTTPInitial((I) httpObject);
-            } else {
-                // Similar to the AWAITING_PROXY_AUTHENTICATION case below, we may enter an AWAITING_INITIAL
-                // state if the proxy responded to an earlier request with a 502 or 504 response, or a short-circuit
-                // response from a filter. The client may have sent some chunked HttpContent associated with the request
-                // after the short-circuit response was sent. We can safely drop them.
-                LOG.debug("Dropping message because HTTP object was not an HttpMessage. HTTP object may be orphaned content from a short-circuited response. Message: {}", httpObject);
-            }
-            break;
-        case AWAITING_CHUNK:
-            HttpContent chunk = (HttpContent) httpObject;
-            readHTTPChunk(chunk);
-            nextState = ProxyUtils.isLastChunk(chunk) ? AWAITING_INITIAL
-                    : AWAITING_CHUNK;
-            break;
-        case AWAITING_PROXY_AUTHENTICATION:
-            if (httpObject instanceof HttpRequest) {
-                // Once we get an HttpRequest, try to process it as usual
-                nextState = readHTTPInitial((I) httpObject);
-            } else {
-                // Anything that's not an HttpRequest that came in while
-                // we're pending authentication gets dropped on the floor. This
-                // can happen if the connected host already sent us some chunks
-                // (e.g. from a POST) after an initial request that turned out
-                // to require authentication.
-            }
-            break;
-        case CONNECTING:
-            LOG.warn("Attempted to read from connection that's in the process of connecting.  This shouldn't happen.");
-            break;
-        case NEGOTIATING_CONNECT:
-            LOG.debug("Attempted to read from connection that's in the process of negotiating an HTTP CONNECT.  This is probably the LastHttpContent of a chunked CONNECT.");
-            break;
-        case AWAITING_CONNECT_OK:
-            LOG.warn("AWAITING_CONNECT_OK should have been handled by ProxyToServerConnection.read()");
-            break;
-        case HANDSHAKING:
-            LOG.warn(
-                    "Attempted to read from connection that's in the process of handshaking.  This shouldn't happen.",
-                    channel);
-            break;
-        case DISCONNECT_REQUESTED:
-        case DISCONNECTED:
-            LOG.info("Ignoring message since the connection is closed or about to close");
-            break;
+            case AWAITING_INITIAL:
+                if (httpObject instanceof HttpMessage) {
+                    nextState = readHTTPInitial((I) httpObject);
+                } else {
+                    // Similar to the AWAITING_PROXY_AUTHENTICATION case below, we may enter an AWAITING_INITIAL
+                    // state if the proxy responded to an earlier request with a 502 or 504 response, or a short-circuit
+                    // response from a filter. The client may have sent some chunked HttpContent associated with the request
+                    // after the short-circuit response was sent. We can safely drop them.
+                    LOG.debug(ProxyConnection.this, "Dropping message because HTTP object was not an HttpMessage. HTTP object may be orphaned content from a short-circuited response. Message: {}", httpObject);
+                }
+                break;
+            case AWAITING_CHUNK:
+                HttpContent chunk = (HttpContent) httpObject;
+                readHTTPChunk(chunk);
+                nextState = ProxyUtils.isLastChunk(chunk) ? AWAITING_INITIAL
+                        : AWAITING_CHUNK;
+                break;
+            case AWAITING_PROXY_AUTHENTICATION:
+                if (httpObject instanceof HttpRequest) {
+                    // Once we get an HttpRequest, try to process it as usual
+                    nextState = readHTTPInitial((I) httpObject);
+                } else {
+                    // Anything that's not an HttpRequest that came in while
+                    // we're pending authentication gets dropped on the floor. This
+                    // can happen if the connected host already sent us some chunks
+                    // (e.g. from a POST) after an initial request that turned out
+                    // to require authentication.
+                }
+                break;
+            case CONNECTING:
+                LOG.warn(ProxyConnection.this, "Attempted to read from connection that's in the process of connecting.  This shouldn't happen.");
+                break;
+            case NEGOTIATING_CONNECT:
+                LOG.debug(ProxyConnection.this, "Attempted to read from connection that's in the process of negotiating an HTTP CONNECT.  This is probably the LastHttpContent of a chunked CONNECT.");
+                break;
+            case AWAITING_CONNECT_OK:
+                LOG.warn(ProxyConnection.this, "AWAITING_CONNECT_OK should have been handled by ProxyToServerConnection.read()");
+                break;
+            case HANDSHAKING:
+                LOG.warn(
+                        "Attempted to read from connection that's in the process of handshaking.  This shouldn't happen.",
+                        channel);
+                break;
+            case DISCONNECT_REQUESTED:
+            case DISCONNECTED:
+                LOG.info(ProxyConnection.this, "Ignoring message since the connection is closed or about to close");
+                break;
         }
         become(nextState);
     }
@@ -213,7 +216,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      */
     void write(Object msg) {
         if (msg instanceof ReferenceCounted) {
-            LOG.debug("Retaining reference counted message");
+            LOG.debug(ProxyConnection.this, "Retaining reference counted message");
             ((ReferenceCounted) msg).retain();
         }
 
@@ -221,7 +224,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
     }
 
     void doWrite(Object msg) {
-        LOG.debug("Writing: {}", msg);
+        LOG.debug(ProxyConnection.this, "Writing: {}", msg);
 
         try {
             if (msg instanceof HttpObject) {
@@ -230,7 +233,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
                 writeRaw((ByteBuf) msg);
             }
         } finally {
-            LOG.debug("Wrote: {}", msg);
+            LOG.debug(ProxyConnection.this, "Wrote: {}", msg);
         }
     }
 
@@ -240,7 +243,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
     protected void writeHttp(HttpObject httpObject) {
         if (ProxyUtils.isLastChunk(httpObject)) {
             channel.write(httpObject);
-            LOG.debug("Writing an empty buffer to signal the end of our chunked transfer");
+            LOG.debug(ProxyConnection.this, "Writing an empty buffer to signal the end of our chunked transfer");
             writeToChannel(Unpooled.EMPTY_BUFFER);
         } else {
             writeToChannel(httpObject);
@@ -270,7 +273,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * established.
      */
     protected void connected() {
-        LOG.debug("Connected");
+        LOG.debug(ProxyConnection.this, "Connected");
     }
 
     /**
@@ -279,7 +282,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      */
     protected void disconnected() {
         become(DISCONNECTED);
-        LOG.debug("Disconnected");
+        LOG.debug(ProxyConnection.this, "Disconnected");
     }
 
     /**
@@ -295,7 +298,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * Enables tunneling on this connection by dropping the HTTP related
      * encoders and decoders, as well as idle timers.
      * </p>
-     * 
+     *
      * <p>
      * Note - the work is done on the {@link ChannelHandlerContext}'s executor
      * because {@link ChannelPipeline#remove(String)} can deadlock if called
@@ -334,33 +337,28 @@ abstract class ProxyConnection<I extends HttpObject> extends
 
     /**
      * Encrypts traffic on this connection with SSL/TLS.
-     * 
-     * @param sslEngine
-     *            the {@link SSLEngine} for doing the encryption
-     * @param authenticateClients
-     *            determines whether to authenticate clients or not
+     *
+     * @param sslEngine           the {@link SSLEngine} for doing the encryption
+     * @param authenticateClients determines whether to authenticate clients or not
      * @return a Future for when the SSL handshake has completed
      */
     protected Future<Channel> encrypt(SSLEngine sslEngine,
-            boolean authenticateClients) {
+                                      boolean authenticateClients) {
         return encrypt(ctx.pipeline(), sslEngine, authenticateClients);
     }
 
     /**
      * Encrypts traffic on this connection with SSL/TLS.
-     * 
-     * @param pipeline
-     *            the ChannelPipeline on which to enable encryption
-     * @param sslEngine
-     *            the {@link SSLEngine} for doing the encryption
-     * @param authenticateClients
-     *            determines whether to authenticate clients or not
+     *
+     * @param pipeline            the ChannelPipeline on which to enable encryption
+     * @param sslEngine           the {@link SSLEngine} for doing the encryption
+     * @param authenticateClients determines whether to authenticate clients or not
      * @return a Future for when the SSL handshake has completed
      */
     protected Future<Channel> encrypt(ChannelPipeline pipeline,
-            SSLEngine sslEngine,
-            boolean authenticateClients) {
-        LOG.debug("Enabling encryption with SSLEngine: {}",
+                                      SSLEngine sslEngine,
+                                      boolean authenticateClients) {
+        LOG.debug(ProxyConnection.this, "Enabling encryption with SSLEngine: {}",
                 sslEngine);
         this.sslEngine = sslEngine;
         sslEngine.setUseClientMode(runsAsSslClient);
@@ -369,7 +367,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
             channel.config().setAutoRead(true);
         }
         SslHandler handler = new SslHandler(sslEngine);
-        if(pipeline.get("ssl") == null) {
+        if (pipeline.get("ssl") == null) {
             pipeline.addFirst("ssl", handler);
         } else {
             // The second SSL handler is added to handle the case
@@ -383,9 +381,8 @@ abstract class ProxyConnection<I extends HttpObject> extends
 
     /**
      * Encrypts the channel using the provided {@link SSLEngine}.
-     * 
-     * @param sslEngine
-     *            the {@link SSLEngine} for doing the encryption
+     *
+     * @param sslEngine the {@link SSLEngine} for doing the encryption
      */
     protected ConnectionFlowStep EncryptChannel(final SSLEngine sslEngine) {
         return new ConnectionFlowStep(this, HANDSHAKING) {
@@ -406,7 +403,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * certain types of filtering activity.
      */
     protected void aggregateContentForFiltering(ChannelPipeline pipeline,
-            int numberOfBytesToBuffer) {
+                                                int numberOfBytesToBuffer) {
         pipeline.addLast("inflater", new HttpContentDecompressor());
         pipeline.addLast("aggregator", new HttpObjectAggregator(
                 numberOfBytesToBuffer));
@@ -416,14 +413,14 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * Callback that's invoked if this connection becomes saturated.
      */
     protected void becameSaturated() {
-        LOG.debug("Became saturated");
+        LOG.debug(ProxyConnection.this, "Became saturated");
     }
 
     /**
      * Callback that's invoked when this connection becomes writeable again.
      */
     protected void becameWritable() {
-        LOG.debug("Became writeable");
+        LOG.debug(ProxyConnection.this, "Became writeable");
     }
 
     /**
@@ -436,12 +433,13 @@ abstract class ProxyConnection<I extends HttpObject> extends
     /* *************************************************************************
      * State/Management
      **************************************************************************/
+
     /**
      * Disconnects. This will wait for pending writes to be flushed before
      * disconnecting.
-     * 
+     *
      * @return {@code Future<Void>} for when we're done disconnecting. If we weren't
-     *         connected, this returns null.
+     * connected, this returns null.
      */
     Future<Void> disconnect() {
         if (channel == null) {
@@ -513,7 +511,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * Call this to stop reading.
      */
     protected void stopReading() {
-        LOG.debug("Stopped reading");
+        LOG.debug(ProxyConnection.this, "Stopped reading");
         this.channel.config().setAutoRead(false);
     }
 
@@ -521,18 +519,17 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * Call this to resume reading.
      */
     protected void resumeReading() {
-        LOG.debug("Resumed reading");
+        LOG.debug(ProxyConnection.this, "Resumed reading");
         this.channel.config().setAutoRead(true);
     }
 
     /**
      * Request the ProxyServer for Filters.
-     * 
+     * <p>
      * By default, no-op filters are returned by DefaultHttpProxyServer.
      * Subclasses of ProxyConnection can change this behaviour.
-     * 
-     * @param httpRequest
-     *            Filter attached to the give HttpRequest (if any)
+     *
+     * @param httpRequest Filter attached to the give HttpRequest (if any)
      */
     protected HttpFilters getHttpFiltersFromProxyServer(HttpRequest httpRequest) {
         return proxyServer.getFiltersSource().filterRequest(httpRequest, ctx);
@@ -581,8 +578,9 @@ abstract class ProxyConnection<I extends HttpObject> extends
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         try {
+            LOG.info(this, "Channel inactive called");
             disconnected();
-            lastReadTime = System.currentTimeMillis();
+            updateLastReadTime();
         } finally {
             super.channelInactive(ctx);
         }
@@ -591,7 +589,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
     @Override
     public final void channelWritabilityChanged(ChannelHandlerContext ctx)
             throws Exception {
-        LOG.debug("Writability changed. Is writable: {}", channel.isWritable());
+        LOG.debug(ProxyConnection.this, "Writability changed. Is writable: {}", channel.isWritable());
         try {
             if (this.channel.isWritable()) {
                 becameWritable();
@@ -613,7 +611,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * We're looking for {@link IdleStateEvent}s to see if we need to
      * disconnect.
      * </p>
-     * 
+     *
      * <p>
      * Note - we don't care what kind of IdleState we got. Thanks to <a
      * href="https://github.com/qbast">qbast</a> for pointing this out.
@@ -624,7 +622,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
             throws Exception {
         try {
             if (evt instanceof IdleStateEvent) {
-                LOG.debug("Got idle");
+                LOG.debug(ProxyConnection.this, "Got idle");
                 timedOut();
             }
         } finally {
@@ -650,7 +648,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
                     bytesRead(((ByteBuf) msg).readableBytes());
                 }
             } catch (Throwable t) {
-                LOG.warn("Unable to record bytesRead", t);
+                LOG.warn(ProxyConnection.this, "Unable to record bytesRead", t);
             } finally {
                 super.channelRead(ctx, msg);
             }
@@ -673,7 +671,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
                     requestRead((HttpRequest) msg);
                 }
             } catch (Throwable t) {
-                LOG.warn("Unable to record bytesRead", t);
+                LOG.warn(ProxyConnection.this, "Unable to record bytesRead", t);
             } finally {
                 super.channelRead(ctx, msg);
             }
@@ -696,7 +694,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
                     responseRead((HttpResponse) msg);
                 }
             } catch (Throwable t) {
-                LOG.warn("Unable to record bytesRead", t);
+                LOG.warn(ProxyConnection.this, "Unable to record bytesRead", t);
             } finally {
                 super.channelRead(ctx, msg);
             }
@@ -713,14 +711,14 @@ abstract class ProxyConnection<I extends HttpObject> extends
             ChannelOutboundHandlerAdapter {
         @Override
         public void write(ChannelHandlerContext ctx,
-                Object msg, ChannelPromise promise)
+                          Object msg, ChannelPromise promise)
                 throws Exception {
             try {
                 if (msg instanceof ByteBuf) {
                     bytesWritten(((ByteBuf) msg).readableBytes());
                 }
             } catch (Throwable t) {
-                LOG.warn("Unable to record bytesRead", t);
+                LOG.warn(ProxyConnection.this, "Unable to record bytesRead", t);
             } finally {
                 super.write(ctx, msg, promise);
             }
@@ -737,7 +735,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
             ChannelOutboundHandlerAdapter {
         @Override
         public void write(ChannelHandlerContext ctx,
-                Object msg, ChannelPromise promise)
+                          Object msg, ChannelPromise promise)
                 throws Exception {
             HttpRequest originalRequest = null;
             if (msg instanceof HttpRequest) {
@@ -783,14 +781,14 @@ abstract class ProxyConnection<I extends HttpObject> extends
             ChannelOutboundHandlerAdapter {
         @Override
         public void write(ChannelHandlerContext ctx,
-                Object msg, ChannelPromise promise)
+                          Object msg, ChannelPromise promise)
                 throws Exception {
             try {
                 if (msg instanceof HttpResponse) {
                     responseWritten(((HttpResponse) msg));
                 }
             } catch (Throwable t) {
-                LOG.warn("Error while invoking responseWritten callback", t);
+                LOG.warn(ProxyConnection.this, "Error while invoking responseWritten callback", t);
             } finally {
                 super.write(ctx, msg, promise);
             }
