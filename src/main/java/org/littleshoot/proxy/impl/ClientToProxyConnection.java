@@ -10,8 +10,8 @@ import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.traffic.GlobalTrafficShapingHandler;
-import io.netty.util.concurrent.Future;
 import io.netty.util.ReferenceCounted;
+import io.netty.util.concurrent.Future;
 import org.apache.commons.lang3.StringUtils;
 import org.littleshoot.proxy.*;
 
@@ -20,7 +20,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
-import java.util.*;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1171,9 +1174,8 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
         if (headers.contains(HttpHeaderNames.CONNECTION)) {
             for (String headerValue : headers.getAll(HttpHeaderNames.CONNECTION)) {
                 for (String connectionToken : ProxyUtils.splitCommaSeparatedHeaderValues(headerValue)) {
-                    // do not strip out the Transfer-Encoding header if it is specified in the Connection header, since LittleProxy does not
-                    // normally modify the Transfer-Encoding of the message.
-                    if (!HttpHeaderNames.TRANSFER_ENCODING.toString().equals(connectionToken.toLowerCase(Locale.US))) {
+
+                    if (ProxyUtils.shouldStripConnectionToken(connectionToken)) {
                         headers.remove(connectionToken);
                     }
                 }

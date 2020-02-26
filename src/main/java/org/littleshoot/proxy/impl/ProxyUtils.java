@@ -38,10 +38,10 @@ public class ProxyUtils {
             HttpHeaderNames.PROXY_AUTHENTICATE.toString(),
             HttpHeaderNames.PROXY_AUTHORIZATION.toString(),
             HttpHeaderNames.TE.toString(),
-            HttpHeaderNames.TRAILER.toString(),
+            HttpHeaderNames.TRAILER.toString()
             /*  Note: Not removing Transfer-Encoding since LittleProxy does not normally re-chunk content.
-                HttpHeaderNames.TRANSFER_ENCODING.toString(), */
-            HttpHeaderNames.UPGRADE.toString()
+                HttpHeaderNames.TRANSFER_ENCODING.toString(),
+            HttpHeaderNames.UPGRADE.toString() */
     );
 
     private static final Logger LOG = LoggerFactory.getLogger(ProxyUtils.class);
@@ -64,9 +64,19 @@ public class ProxyUtils {
             Pattern.CASE_INSENSITIVE);
 
     /**
+     * Connection tokens that should not be removed
+     */
+    private static final Set<String> CONNECTION_TOKEN_SHOULD_NOT_REMOVED = ImmutableSet.of(
+            HttpHeaderNames.UPGRADE.toString(),
+            HttpHeaderNames.TRANSFER_ENCODING.toString()
+
+    );
+
+
+    /**
      * Strips the host from a URI string. This will turn "http://host.com/path"
      * into "/path".
-     * 
+     *
      * @param uri
      *            The URI to transform.
      * @return A string with the URI stripped.
@@ -87,11 +97,11 @@ public class ProxyUtils {
 
     /**
      * Formats the given date according to the RFC 1123 pattern.
-     * 
+     *
      * @param date
      *            The date to format.
      * @return An RFC 1123 formatted date string.
-     * 
+     *
      * @see #PATTERN_RFC1123
      */
     public static String formatDate(final Date date) {
@@ -102,16 +112,16 @@ public class ProxyUtils {
      * Formats the given date according to the specified pattern. The pattern
      * must conform to that used by the {@link SimpleDateFormat simple date
      * format} class.
-     * 
+     *
      * @param date
      *            The date to format.
      * @param pattern
      *            The pattern to use for formatting the date.
      * @return A formatted date string.
-     * 
+     *
      * @throws IllegalArgumentException
      *             If the given date pattern is invalid.
-     * 
+     *
      * @see SimpleDateFormat
      */
     public static String formatDate(final Date date, final String pattern) {
@@ -129,7 +139,7 @@ public class ProxyUtils {
     /**
      * If an HttpObject implements the market interface LastHttpContent, it
      * represents the last chunk of a transfer.
-     * 
+     *
      * @see io.netty.handler.codec.http.LastHttpContent
      */
     public static boolean isLastChunk(final HttpObject httpObject) {
@@ -139,7 +149,7 @@ public class ProxyUtils {
     /**
      * If an HttpObject is not the last chunk, then that means there are other
      * chunks that will follow.
-     * 
+     *
      * @see io.netty.handler.codec.http.FullHttpMessage
      */
     public static boolean isChunked(final HttpObject httpObject) {
@@ -148,7 +158,7 @@ public class ProxyUtils {
 
     /**
      * Parses the host and port an HTTP request is being sent to.
-     * 
+     *
      * @param httpRequest
      *            The request.
      * @return The host and port string.
@@ -159,7 +169,7 @@ public class ProxyUtils {
 
     /**
      * Parses the host and port an HTTP request is being sent to.
-     * 
+     *
      * @param uri
      *            The URI.
      * @return The host and port string.
@@ -186,7 +196,7 @@ public class ProxyUtils {
 
     /**
      * Make a copy of the response including all mutable fields.
-     * 
+     *
      * @param original
      *            The original response to copy from.
      * @return The copy with all mutable fields from the original.
@@ -223,7 +233,7 @@ public class ProxyUtils {
          a pseudonym.
      * </pre>
      *
-     * 
+     *
      * @param httpMessage HTTP message to add the Via header to
      * @param alias the alias to provide in the Via header for this proxy
      */
@@ -249,7 +259,7 @@ public class ProxyUtils {
     /**
      * Returns <code>true</code> if the specified string is either "true" or
      * "on" ignoring case.
-     * 
+     *
      * @param val
      *            The string in question.
      * @return <code>true</code> if the specified string is either "true" or
@@ -262,7 +272,7 @@ public class ProxyUtils {
     /**
      * Returns <code>true</code> if the specified string is either "false" or
      * "off" ignoring case.
-     * 
+     *
      * @param val
      *            The string in question.
      * @return <code>true</code> if the specified string is either "false" or
@@ -289,11 +299,11 @@ public class ProxyUtils {
         }
         return true;
     }
-    
+
     public static int extractInt(final Properties props, final String key) {
         return extractInt(props, key, -1);
     }
-    
+
     public static int extractInt(final Properties props, final String key, int defaultValue) {
         final String readThrottleString = props.getProperty(key);
         if (StringUtils.isNotBlank(readThrottleString) && NumberUtils.isCreatable(readThrottleString)) {
@@ -517,6 +527,10 @@ public class ProxyUtils {
      */
     public static boolean shouldRemoveHopByHopHeader(String headerName) {
         return SHOULD_NOT_PROXY_HOP_BY_HOP_HEADERS.contains(headerName);
+    }
+
+    public static boolean shouldStripConnectionToken(String connectionToken) {
+        return !CONNECTION_TOKEN_SHOULD_NOT_REMOVED.contains(connectionToken.toLowerCase(Locale.US));
     }
 
     /**
