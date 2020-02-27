@@ -1,10 +1,11 @@
 package org.littleshoot.proxy.impl;
 
 import com.google.common.io.BaseEncoding;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.haproxy.HAProxyMessage;
 import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 import io.netty.handler.codec.http.*;
@@ -379,7 +380,7 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
     }
 
     @Override
-    protected void readRaw(ByteBuf buf) {
+    protected void readRaw(Object buf) {
         currentServerConnection.write(buf);
     }
 
@@ -792,6 +793,8 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
                 "idle",
                 new IdleStateHandler(0, 0, proxyServer
                         .getIdleConnectionTimeout()));
+
+        pipeline.addLast("websocket", new WebSocketClientToProxyHandler());
 
         pipeline.addLast("handler", this);
     }
@@ -1466,4 +1469,33 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
         return clientDetails;
     }
 
+
+    private class WebSocketClientToProxyHandler extends WebSocketHandler {
+
+        private WebSocketClientToProxyHandler() {
+            super(true);
+        }
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+
+            if (msg instanceof HttpRequest) {
+                handleRequest((HttpRequest) msg);
+            }
+
+            super.channelRead(ctx, msg);
+        }
+
+        @Override
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            super.write(ctx, msg, promise);
+
+            if (msg instanceof HttpResponse) {
+                handleResponse(ctx.pipeline(), (HttpResponse) msg);
+            }
+
+
+        }
+
+    }
 }

@@ -1,18 +1,27 @@
 package org.littleshoot.proxy.impl;
 
+import com.google.common.collect.ImmutableList;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.handler.codec.haproxy.HAProxyMessage;
 import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.websocketx.WebSocket13FrameDecoder;
+import io.netty.handler.codec.http.websocketx.WebSocket13FrameEncoder;
+import io.netty.handler.codec.http.websocketx.WebSocketFrameDecoder;
+import io.netty.handler.codec.http.websocketx.WebSocketFrameEncoder;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.ReferenceCounted;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import org.littleshoot.proxy.HttpFilters;
+import org.littleshoot.proxy.utils.HttpUtils;
+import org.littleshoot.proxy.utils.WebSocketUtils;
 
 import javax.net.ssl.SSLEngine;
+import java.util.List;
+import java.util.Optional;
 
 import static org.littleshoot.proxy.impl.ConnectionState.*;
 
@@ -108,7 +117,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
 
         if (tunneling) {
             // In tunneling mode, this connection is simply shoveling bytes
-            readRaw((ByteBuf) msg);
+            readRaw(msg);
         } else if (msg instanceof HAProxyMessage) {
             readHAProxyMessage((HAProxyMessage) msg);
         } else {
@@ -204,7 +213,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
      * Implement this to handle reading a raw buffer as they are used in HTTP
      * tunneling.
      */
-    protected abstract void readRaw(ByteBuf buf);
+    protected abstract void readRaw(Object buf);
 
     /* *************************************************************************
      * Writing
@@ -230,7 +239,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
             if (msg instanceof HttpObject) {
                 writeHttp((HttpObject) msg);
             } else {
-                writeRaw((ByteBuf) msg);
+                writeRaw(msg);
             }
         } finally {
             LOG.debug(ProxyConnection.this, "Wrote: {}", msg);
@@ -253,7 +262,7 @@ abstract class ProxyConnection<I extends HttpObject> extends
     /**
      * Writes raw buffers to the connection.
      */
-    protected void writeRaw(ByteBuf buf) {
+    protected void writeRaw(Object buf) {
         writeToChannel(buf);
     }
 
@@ -797,4 +806,53 @@ abstract class ProxyConnection<I extends HttpObject> extends
         protected abstract void responseWritten(HttpResponse httpResponse);
     }
 
+
+    protected abstract class WebSocketHandler extends ChannelDuplexHandler {
+
+        private static final int KB                       = 1024;
+        private static final int MAX_FRAME_PAYLOAD_LENGTH = 128 * KB;
+
+        private boolean websocketRequested;
+
+        private List<String> handlersToRemove = ImmutableList.of("decoder", "encoder", "responseWrittenMonitor", "requestReadMonitor");
+        private boolean      expectedMaskedFrame;
+
+        protected WebSocketHandler(boolean expectedMaskedFrame) {
+            this.expectedMaskedFrame = expectedMaskedFrame;
+        }
+
+        public void handleRequest(HttpRequest request) {
+
+            if (WebSocketUtils.isWebSocketRequest(request)) {
+                websocketRequested = true;
+                LOG.info("Websocket requested from " + HttpUtils.getHeaderValue(request, HttpHeaderNames.HOST.toString()));
+                Optional<String> websocketVersion = HttpUtils.getHeaderValue(request, HttpHeaderNames.SEC_WEBSOCKET_VERSION.toString());
+                Optional<String> websocketProtocol = HttpUtils.getHeaderValue(request, HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL.toString());
+                Optional<String> websocketExtension = HttpUtils.getHeaderValue(request, HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS.toString());
+
+                websocketVersion.ifPresent(w -> LOG.info("Got websocket extension version:" + w));
+                websocketProtocol.ifPresent(w -> LOG.info("Got websocket protocol:" + w));
+                websocketExtension.ifPresent(w -> LOG.info("Got websocket extension:" + w));
+            }
+        }
+
+        public void handleResponse(ChannelPipeline pipeline, HttpResponse response) {
+
+            if (websocketRequested && WebSocketUtils.isWebSocketResponse(response)) {
+                LOG.info("Websocket established, enable tunneling");
+                tunneling = true;
+                WebSocketFrameDecoder frameDecoder = new WebSocket13FrameDecoder(expectedMaskedFrame, true, MAX_FRAME_PAYLOAD_LENGTH, false);
+                WebSocketFrameEncoder frameEncoder = new WebSocket13FrameEncoder(!expectedMaskedFrame);
+                pipeline.addBefore("decoder", "ws-decoder", frameDecoder);
+                pipeline.addBefore("encoder", "ws-encoder", frameEncoder);
+
+                handlersToRemove.forEach(h -> removeHandler(pipeline, h));
+            }
+        }
+
+        private void removeHandler(ChannelPipeline pipeline, String handlerKey) {
+            Optional.ofNullable(pipeline.get(handlerKey)).ifPresent(h -> pipeline.remove(handlerKey));
+        }
+
+    }
 }
