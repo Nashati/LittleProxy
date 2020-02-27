@@ -1,17 +1,18 @@
 package org.littleshoot.proxy.impl;
 
 import com.google.common.io.BaseEncoding;
-import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPipeline;
+import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.haproxy.HAProxyMessage;
 import io.netty.handler.codec.haproxy.HAProxyMessageDecoder;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.traffic.GlobalTrafficShapingHandler;
-import io.netty.util.concurrent.Future;
 import io.netty.util.ReferenceCounted;
+import io.netty.util.concurrent.Future;
 import org.apache.commons.lang3.StringUtils;
 import org.littleshoot.proxy.*;
 
@@ -20,7 +21,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
-import java.util.*;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -376,7 +380,7 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
     }
 
     @Override
-    protected void readRaw(ByteBuf buf) {
+    protected void readRaw(Object buf) {
         currentServerConnection.write(buf);
     }
 
@@ -790,6 +794,8 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
                 new IdleStateHandler(0, 0, proxyServer
                         .getIdleConnectionTimeout()));
 
+        pipeline.addLast("websocket", new WebSocketClientToProxyHandler());
+
         pipeline.addLast("handler", this);
     }
 
@@ -1171,9 +1177,8 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
         if (headers.contains(HttpHeaderNames.CONNECTION)) {
             for (String headerValue : headers.getAll(HttpHeaderNames.CONNECTION)) {
                 for (String connectionToken : ProxyUtils.splitCommaSeparatedHeaderValues(headerValue)) {
-                    // do not strip out the Transfer-Encoding header if it is specified in the Connection header, since LittleProxy does not
-                    // normally modify the Transfer-Encoding of the message.
-                    if (!HttpHeaderNames.TRANSFER_ENCODING.toString().equals(connectionToken.toLowerCase(Locale.US))) {
+
+                    if (ProxyUtils.shouldStripConnectionToken(connectionToken)) {
                         headers.remove(connectionToken);
                     }
                 }
@@ -1464,4 +1469,33 @@ public class ClientToProxyConnection extends ProxyConnection<HttpRequest> {
         return clientDetails;
     }
 
+
+    private class WebSocketClientToProxyHandler extends WebSocketHandler {
+
+        private WebSocketClientToProxyHandler() {
+            super(true);
+        }
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+
+            if (msg instanceof HttpRequest) {
+                handleRequest((HttpRequest) msg);
+            }
+
+            super.channelRead(ctx, msg);
+        }
+
+        @Override
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            super.write(ctx, msg, promise);
+
+            if (msg instanceof HttpResponse) {
+                handleResponse(ctx.pipeline(), (HttpResponse) msg);
+            }
+
+
+        }
+
+    }
 }

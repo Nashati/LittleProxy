@@ -2,53 +2,14 @@ package org.littleshoot.proxy.impl;
 
 import com.google.common.net.HostAndPort;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
+import io.netty.channel.*;
 import io.netty.channel.ChannelHandler.Sharable;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.channel.udt.nio.NioUdtProvider;
 import io.netty.handler.codec.haproxy.HAProxyMessage;
-import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpContent;
-import io.netty.handler.codec.http.HttpMessage;
-import io.netty.handler.codec.http.HttpObject;
-import io.netty.handler.codec.http.HttpObjectAggregator;
-import io.netty.handler.codec.http.HttpRequest;
-import io.netty.handler.codec.http.HttpRequestEncoder;
-import io.netty.handler.codec.http.HttpResponse;
-import io.netty.handler.codec.http.HttpResponseDecoder;
-import io.netty.handler.codec.http.HttpResponseEncoder;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpUtil;
-import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.handler.codec.socksx.v4.DefaultSocks4CommandRequest;
-import io.netty.handler.codec.socksx.v4.Socks4ClientDecoder;
-import io.netty.handler.codec.socksx.v4.Socks4ClientEncoder;
-import io.netty.handler.codec.socksx.v4.Socks4CommandResponse;
-import io.netty.handler.codec.socksx.v4.Socks4CommandStatus;
-import io.netty.handler.codec.socksx.v4.Socks4CommandType;
-import io.netty.handler.codec.socksx.v5.DefaultSocks5CommandRequest;
-import io.netty.handler.codec.socksx.v5.DefaultSocks5InitialRequest;
-import io.netty.handler.codec.socksx.v5.DefaultSocks5PasswordAuthRequest;
-import io.netty.handler.codec.socksx.v5.Socks5AddressType;
-import io.netty.handler.codec.socksx.v5.Socks5AuthMethod;
-import io.netty.handler.codec.socksx.v5.Socks5ClientEncoder;
-import io.netty.handler.codec.socksx.v5.Socks5CommandResponse;
-import io.netty.handler.codec.socksx.v5.Socks5CommandResponseDecoder;
-import io.netty.handler.codec.socksx.v5.Socks5CommandStatus;
-import io.netty.handler.codec.socksx.v5.Socks5CommandType;
-import io.netty.handler.codec.socksx.v5.Socks5InitialResponse;
-import io.netty.handler.codec.socksx.v5.Socks5InitialResponseDecoder;
-import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthResponse;
-import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthResponseDecoder;
-import io.netty.handler.codec.socksx.v5.Socks5PasswordAuthStatus;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.socksx.v4.*;
+import io.netty.handler.codec.socksx.v5.*;
 import io.netty.handler.proxy.ProxyConnectException;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.traffic.GlobalTrafficShapingHandler;
@@ -56,16 +17,7 @@ import io.netty.resolver.AddressResolverGroup;
 import io.netty.resolver.DefaultAddressResolverGroup;
 import io.netty.util.ReferenceCounted;
 import io.netty.util.concurrent.Future;
-import org.littleshoot.proxy.ActivityTracker;
-import org.littleshoot.proxy.ChainedProxy;
-import org.littleshoot.proxy.ChainedProxyAdapter;
-import org.littleshoot.proxy.ChainedProxyManager;
-import org.littleshoot.proxy.ChainedProxyType;
-import org.littleshoot.proxy.FullFlowContext;
-import org.littleshoot.proxy.HttpFilters;
-import org.littleshoot.proxy.MitmManager;
-import org.littleshoot.proxy.TransportProtocol;
-import org.littleshoot.proxy.UnknownTransportProtocolException;
+import org.littleshoot.proxy.*;
 import org.littleshoot.proxy.extras.HAProxyMessageEncoder;
 
 import javax.net.ssl.SSLHandshakeException;
@@ -80,12 +32,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 
-import static org.littleshoot.proxy.impl.ConnectionState.AWAITING_CHUNK;
-import static org.littleshoot.proxy.impl.ConnectionState.AWAITING_CONNECT_OK;
-import static org.littleshoot.proxy.impl.ConnectionState.AWAITING_INITIAL;
-import static org.littleshoot.proxy.impl.ConnectionState.CONNECTING;
-import static org.littleshoot.proxy.impl.ConnectionState.DISCONNECTED;
-import static org.littleshoot.proxy.impl.ConnectionState.HANDSHAKING;
+import static org.littleshoot.proxy.impl.ConnectionState.*;
 
 /**
  * <p>
@@ -285,7 +232,7 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
     }
 
     @Override
-    protected void readRaw(ByteBuf buf) {
+    protected void readRaw(Object buf) {
         clientConnection.write(buf);
     }
 
@@ -1113,6 +1060,8 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
                 new IdleStateHandler(0, 0, proxyServer
                         .getIdleConnectionTimeout()));
 
+        pipeline.addLast("websocket", new WebSocketProxyToServerHandler());
+
         pipeline.addLast("handler", this);
     }
 
@@ -1264,4 +1213,29 @@ public class ProxyToServerConnection extends ProxyConnection<HttpResponse> {
         }
     };
 
+
+    private class WebSocketProxyToServerHandler extends WebSocketHandler {
+
+        private WebSocketProxyToServerHandler() {
+            super(false);
+        }
+
+        @Override
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            super.channelRead(ctx, msg);
+
+            if (msg instanceof HttpResponse) {
+                handleResponse(ctx.pipeline(), (HttpResponse) msg);
+            }
+        }
+
+        @Override
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            if (msg instanceof HttpRequest) {
+                handleRequest((HttpRequest) msg);
+            }
+
+            super.write(ctx, msg, promise);
+        }
+    }
 }
